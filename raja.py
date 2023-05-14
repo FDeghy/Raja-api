@@ -5,7 +5,17 @@ from Crypto.Util.Padding import unpad, pad
 from Crypto.Protocol.KDF import PBKDF2
 from Crypto.Hash import SHA1
 from Crypto.Random import get_random_bytes
-from requests import get
+from requests import get, Session
+import urllib3
+import re
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+def get_api_key():
+    main_page = get("https://www.raja.ir/", verify=False).text
+    js_name = re.findall("<script src=\"(main-((?!\.js).)+\.js)\" type=\"module\">", main_page)[-1][0]
+    js_file = get(f"https://www.raja.ir/{js_name}", verify=False).text
+    api_key = re.search("\"api-key\":\"([^\"]+)\"", js_file).group(1)
+    return api_key
 
 def get_password():
     json_data = get("https://www.raja.ir/assets/File/xrs.json", verify=False).text.encode("utf-8")
@@ -30,15 +40,16 @@ def encrypt(q: str, password=get_password()):
     return e
 
 
-password = get_password()
-decrypted = decrypt("WGFpvi9BCKBrhakYl+2Q0rUNjxPGfloSL+oO1DDCTqmT7txE7PJvBmITVseUiLYlbjf93pmDs+4R6qz+Shynfh6J71iDhqihW9vaCBwxocE=", password)
-print(decrypted)
+if __name__ == "__main__":
+    password = get_password()
+    decrypted = decrypt("RGLB6LZpyZ5qdEzLWyMvXzvJrHjKZcfMxtzy9aAxTP5b+Nzz+BSDUEqAA4ecuSTgOQhc4ipd5sh0M9nR+HfyMQG/DZQGp6FzRKaOiSqEyR8=", password)
+    print(decrypted)
 
-# Stations: https://www.raja.ir/assets/File/station.json
-# FromStation-ToStation-TicketType-MoveType- GoDate -ReturnDate-NumberOfPassengers-CharterCoupe-ExcursionsType-MTCode-Language(L1=Farsi)
-#     161    -    1    -  Family  -   1    -14010901-          -         1        -    false   -       0      -   0  -   L1
-q = encrypt("161-1-Family-1-14010901--1-false-0-0-L1", password)
-url = "https://hostservice.raja.ir/Api/ServiceProvider/TrainListEq"
-trains = get(url, params={"q": q}, verify=False).json()
-
-print(json.dumps(trains, indent=4))
+    # Stations: https://www.raja.ir/assets/File/station.json
+    # FromStation-ToStation-TicketType-MoveType- GoDate -ReturnDate-NumberOfPassengers-CharterCoupe-ExcursionsType-MTCode-Language(L1=Farsi)
+    #     161    -    1    -  Family  -   1    -14010901-          -         1        -    false   -       0      -   0  -   L1
+    q = encrypt(decrypted, password)
+    url = "https://hostservice.raja.ir/Api/ServiceProvider/TrainListEq"
+    api_key = get_api_key()
+    trains = get(url, params={"q": q}, headers={"api-key": api_key}, verify=False)
+    print(json.dumps(trains.json(), indent=4))
